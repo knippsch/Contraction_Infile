@@ -6,6 +6,7 @@
  */
 
 #include "GlobalData.h"
+#include "GlobalData_tests.hpp"
 
 namespace po = boost::program_options;
 
@@ -18,13 +19,6 @@ GlobalData* GlobalData::Instance () {
   return instance_;
 }
 // *****************************************************************************
-// A helper function to simplify the main part.
-template<class T>
-std::ostream& operator<< (std::ostream& os, const std::vector<T>& v) {
-  std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, " "));
-  return os;
-}
-// *****************************************************************************
 /// @brief Convenience function for when a 'store_to' value is being provided
 ///        to typed_value.
 ///
@@ -34,22 +28,6 @@ std::ostream& operator<< (std::ostream& os, const std::vector<T>& v) {
 template<typename T>
 boost::program_options::typed_value<T>* make_value (T* store_to) {
   return boost::program_options::value<T>(store_to);
-}
-// *****************************************************************************
-/// @brief Stream insertion operator for slave.
-///
-/// @param stream The stream into which quark is being inserted.
-/// @param q The quark object.
-///
-/// @return Reference to the ostream.
-static std::ostream& operator<< (std::ostream& stream, const quark& quark) {
-  return stream << "\tQUARK type: ****  " << quark.type
-      << "  ****\n\t number of random vectors: " << quark.number_of_rnd_vec
-      << "\n\t dilution scheme in time: " << quark.dilution_T
-      << quark.number_of_dilution_T << "\n\t dilution scheme in ev space: "
-      << quark.dilution_E << quark.number_of_dilution_E
-      << "\n\t dilution scheme in Dirac space: " << quark.dilution_D
-      << quark.number_of_dilution_D << "\n";
 }
 // *****************************************************************************
 /// @brief Makes a quark object from a string
@@ -71,6 +49,71 @@ quark make_quark (const std::string& quark_string) {
       boost::lexical_cast<int>(tokens[3]), tokens[4],
       boost::lexical_cast<int>(tokens[5]), tokens[6],
       boost::lexical_cast<int>(tokens[7]));
+}
+// *****************************************************************************
+// *****************************************************************************
+// *****************************************************************************
+void GlobalData::init_from_infile() {
+
+  // extracting all operators which are used in correlations functions
+  std::vector<int> used_operators;
+  for(const auto& corr_list : correlator_list)
+    used_operators.insert(used_operators.end(), 
+                          corr_list.operator_numbers.begin(), 
+                          corr_list.operator_numbers.end());
+  
+  sort(used_operators.begin(), used_operators.end());
+  used_operators.erase(unique(used_operators.begin(), used_operators.end()), 
+                   used_operators.end());
+
+  for(const auto& op_entry : used_operators){
+    for(const auto& individual_operator : operator_list[op_entry]){
+      pdg write;
+      write.gamma = individual_operator.gammas;
+      write.dis3 = individual_operator.dil_vec;
+      for(auto mom : individual_operator.mom_vec){
+        write.p3 = mom;
+        op_Corr.push_back(write);
+      }
+    }
+  }
+  // Test output for the time beeing TODO: can be deleted later
+  for(auto a : op_Corr){
+    std::cout << a.gamma;
+    for(auto b : a.dis3)
+      std::cout << " " << b;
+    for(auto b : a.p3)
+      std::cout << " " << b;
+    std::cout << std::endl;
+  }
+//    for(const auto& bla : op_Corr)
+//    std::cout << bla.gamma << std::endl;
+
+  // TODO: doubly counted op_Corr entries should be searched for and deleted
+
+//  // nb_op - number of combinations of three-momenta and gamma structures
+//  // op    - vector of all three-momenta, three-displacements and gamma 
+//  //         structure combinations
+//  const size_t nb_op = number_of_operators;
+//  op_Corr.resize(nb_op);
+//  const size_t nb_VdaggerV = nb_dis*(nb_mom/2+1);
+//  op_VdaggerV.resize(nb_VdaggerV);
+//  const size_t nb_rVdaggerVr = nb_dis*nb_mom;
+//  op_rVdaggerVr.resize(nb_rVdaggerVr);
+//  set_Corr();
+//
+//  // nb_op_C2 - number of combinations of absolute values squared of momenta
+//  //            and gamma-displacement combinations for 2pt-fct
+//  // op_C2    - vector of all combinations for 2pt-fct and vector of 
+//  //            op-index-pairs with all corresponding three-vectors and gammas
+//  const size_t nb_op_C2 = nb_mom_sq * nb_dg * nb_dg;
+//  op_C2.resize(nb_op_C2);
+//  set_C2();
+//
+//  const size_t nb_op_C4 = nb_mom_sq * nb_mom_sq * nb_dg * nb_dg;
+//  op_C4.resize(nb_op_C4);
+//  set_C4();
+
 }
 // *****************************************************************************
 // *****************************************************************************
@@ -123,7 +166,7 @@ static void create_mom_array_from_string(std::string in,
 }
 // *****************************************************************************
 /// @brief Makes an operator list object from a string
-Operator_list make_operator_list (const std::string& operator_string) {
+Operator_list make_operator_list(const std::string& operator_string) {
 
   Operator_list op_list; // return object
 
@@ -133,16 +176,16 @@ Operator_list make_operator_list (const std::string& operator_string) {
   //                             smaller bits, which are separated by "."
   // Tokenize the string on the ";" delimiter -> Individual operators
   std::vector<std::string> operator_tokens;
-  boost::split(operator_tokens, operator_string, boost::is_any_of(";"));
+  boost::split(operator_tokens, operator_string, boost::is_any_of(":"));
 
   // running over opeator tokens and split them further (Step 2):
   for (const auto& op_t : operator_tokens){
     std::vector<std::string> tokens;
     boost::split(tokens, op_t, boost::is_any_of("."));
+    std::vector<int> gammas;
+    std::array<int, 3> dil_vec;
+    std::vector<std::array<int, 3> > mom_vec;
     for (auto str : tokens){
-      std::vector<int> gammas;
-      std::array<int, 3> dil_vec;
-      std::vector<std::array<int, 3> > mom_vec;
       // getting the gamma structure
       if(str.compare(0,1,"g") == 0)
         gammas.push_back(boost::lexical_cast<int>(str.erase(0,1)));
@@ -170,284 +213,66 @@ Operator_list make_operator_list (const std::string& operator_string) {
         std::cout << "there is something wrong with the operators" << std::endl;
         exit(0);
       }
-      op_list.push_back(Operators(gammas, dil_vec, mom_vec));
     }
+    op_list.push_back(Operators(gammas, dil_vec, mom_vec));
   }
   return op_list;
 }
 // *****************************************************************************
-// *****************************************************************************
-// *****************************************************************************
-// simplifies and cleans read_parameters function
-static void lattice_input_data_handling (const std::string path_output,
-    const std::string name_lattice, const std::string path_config, int Lt,
-    int Lx, int Ly, int Lz) {
-  try{
-    if(Lt < 1){
-      std::cout << "\ninput file error:\n" << "\toption \"Lt\""
-          << " is mendatory and its value must be an integer greater than 0!"
-          << "\n\n";
-      exit(0);
-    }
-    else std::cout << "\n\ttemporal lattice extend .................. " << Lt
-        << "\n";
-    //
-    if(Lx < 1){
-      std::cout << "\ninput file error:\n" << "\toption \"Lx\""
-          << " is mandatory and its value must be an integer greater than 0!"
-          << "\n\n";
-      exit(0);
-    }
-    else std::cout << "\tspatial lattice extend in x direction .... " << Lx
-        << "\n";
-    //
-    if(Ly < 1){
-      std::cout << "\ninput file error:\n" << "\toption \"Ly\""
-          << " is mandatory and its value must be an integer greater than 0!"
-          << "\n\n";
-      exit(0);
-    }
-    else std::cout << "\tspatial lattice extend in y direction .... " << Ly
-        << "\n";
-    //
-    if(Lz < 1){
-      std::cout << "\ninput file error:\n" << "\toption \"Lz\""
-          << " is mandatory and its value must be an integer greater than 0!"
-          << "\n\n\n";
-      exit(0);
-    }
-    else std::cout << "\tspatial lattice extend in z direction .... " << Lz
-        << "\n\n";
-    std::cout << "\tEnsemble ...................................... " <<
-      name_lattice << std::endl;
-    std::cout << "\tResults will be saved to path:\n\t\t"
-        << path_output << "/" << std::endl;
-    std::cout << "\tConfigurations will be read from:\n\t\t"
-        << path_config << "/" << std::endl;
-  }
-  catch(std::exception& e){
-    std::cout << e.what() << "\n";
-    exit(0);
-  }
-}
-// *****************************************************************************
-// simplifies and cleans read_parameters function
-static void eigenvec_perambulator_input_data_handling (
-    const int number_of_eigen_vec, const std::string path_eigenvectors,
-    const std::string name_eigenvectors, const std::string path_perambulators,
-    const std::string name_perambulators) {
+/// @brief Makes an operator list object from a string
+void GlobalData::correlator_input_data_handling (
+                             const std::vector<std::string>& correlator_string){
 
-  try{
-    if(number_of_eigen_vec < 1){
-      std::cout << "\ninput file error:\n" << "\toption \"number_of_eigen_vec\""
-          << " is mandatory and its value must be an integer greater than 0!"
-          << "\n\n";
-      exit(0);
-    }
-    else{
-      std::cout << "\tnumber of eigen vectors .................. "
-          << number_of_eigen_vec << "\n";
-    }
-    std::cout << "\tEigenvectors will be read from files:\n\t\t"
-        << path_eigenvectors << "/" << name_eigenvectors
-        << "\".eigenvector.t.config\"\n";
-    std::cout << "\tPerambulators will be read from files:\n\t\t"
-        << path_perambulators << "/" << name_perambulators
-        << "\".rnd_vec.scheme.t_sink.config\"\n\n";
-  }
-  catch(std::exception& e){
-    std::cout << e.what() << "\n";
-    exit(0);
-  }
-}
-// *****************************************************************************
-// simplifies and cleans read_parameters function
-static void momentum_input_data_handling (const int number_of_max_mom,
-    const int max_mom_in_one_dir, std::vector<int>* mom_squared) {
-
-  try{
-    if(number_of_max_mom < 0){
-      std::cout << "\ninput file error:\n" << "\toption \"number_of_max_mom\""
-          << " is mandatory and its value must be an integer greater or equal 0!"
-          << "\n\n";
-      exit(0);
-    }
-    else std::cout << "\tabsolute value squared of max momentum .... "
-        << number_of_max_mom << "\n";
-    if(max_mom_in_one_dir < 0){
-      std::cout << "\ninput file error:\n" << "\toption \"max_mom_in_one_dir\""
-          << " is mandatory and its value must be an integer greater or equal 0!"
-          << "\n\n";
-      exit(0);
-    }
-    else std::cout << "\tmaximal momentum in one direction ........ "
-        << max_mom_in_one_dir << "\n";
-
-    int max_mom_squared = number_of_max_mom;
-    // generate all used momenta
-    for(int ipx = -max_mom_in_one_dir; ipx <= max_mom_in_one_dir; ++ipx){
-      for(int ipy = -max_mom_in_one_dir; ipy <= max_mom_in_one_dir; ++ipy){
-        for(int ipz = -max_mom_in_one_dir; ipz <= max_mom_in_one_dir; ++ipz){
-          if((ipx * ipx + ipy * ipy + ipz * ipz) > max_mom_squared) {
-            continue;
-          }
-          mom_squared->push_back(ipx * ipx + ipy * ipy + ipz * ipz);
-          std::cout << "\tmomentum p = " << mom_squared->size() - 1
-            << " corresponds to ............ (" 
-            << ipx << ", " << ipy << ", " << ipz << ")\n" << std::endl;
-        }
+  for(auto str : correlator_string){
+  
+    std::vector<std::string> correlator_tokens;
+    boost::split(correlator_tokens, str, boost::is_any_of(":"));
+  
+    std::string type;
+    std::vector<int> quark_number;
+    std::vector<int> operator_number;
+    std::string GEVP;
+    std::vector<int> tot_mom;
+    for (auto corr_t : correlator_tokens){
+      // getting the type name
+      if (corr_t.compare(0,1,"C") == 0)
+        type = corr_t;
+      // getting quark numbers
+      else if (corr_t.compare(0,1,"Q") == 0) 
+        quark_number.push_back(boost::lexical_cast<int>(corr_t.erase(0,1)));
+      // getting operator numbers
+      else if (corr_t.compare(0,2,"Op") == 0)
+        operator_number.push_back(boost::lexical_cast<int>(corr_t.erase(0,2)));
+      // getting the GEVP type
+      else if (corr_t.compare(0,1,"G") == 0)
+        GEVP = corr_t;
+      // getting total momenta for moving frames
+      else if (corr_t.compare(0,1,"P") == 0) {
+        corr_t.erase(0,1);
+        std::vector<std::string> tokens;
+        boost::split(tokens, corr_t, boost::is_any_of(","));
+        for(auto t : tokens)
+          tot_mom.push_back(boost::lexical_cast<int>(t));
+      }
+      // catching wrong entries
+      else {
+        std::cout << "there is something wrong with the correlators" 
+                  << std::endl;
+        exit(0);
       }
     }
-
-  }
-  catch(std::exception& e){
-    std::cout << e.what() << "\n";
-    exit(0);
+    correlator_list.push_back(Correlators
+                          (type, quark_number, operator_number, GEVP, tot_mom));
   }
 }
-// *****************************************************************************
-// simplifies and cleans read_parameters function
-static void dirac_input_data_handling (const int dirac_min,
-    const int dirac_max) {
-
-  try{
-    if(dirac_min < 0 || dirac_min > 15){
-      std::cout << "\ninput file error:\n" << "\toption \"dirac_min\""
-          << " is mandatory and its value must be an integer greater or equal 0 and smaller 16!"
-          << "\n\n";
-      exit(0);
-    }
-    else std::cout << "\tlowest Dirac index used .................. "
-        << dirac_min << "\n";
-    if(dirac_max < 0 || dirac_max > 15){
-      std::cout << "\ninput file error:\n" << "\toption \"dirac_max\""
-          << " is mandatory and its value must be an integer greater or equal 0 and smaller 16!"
-          << "\n\n";
-      exit(0);
-    }
-    else std::cout << "\thighest Dirac index used ................. "
-        << dirac_max << "\n\n";
-  }
-  catch(std::exception& e){
-    std::cout << e.what() << "\n";
-    exit(0);
-  }
-}
-// *****************************************************************************
-// simplifies and cleans read_parameters function
-static void displacement_input_data_handling (const int displ_min,
-    const int displ_max) {
-
-  try{
-    if(displ_min < 0 || displ_min > 3){
-      std::cout << "\ninput file error:\n" << "\toption \"displ_min\""
-          << " is mandatory and its value must be an integer greater or equal 0 and smaller 4!"
-          << "\n\n";
-      exit(0);
-    }
-    else std::cout << "\tmimimal displacement used ................ "
-        << displ_min << "\n";
-    if(displ_max < 0 || displ_max > 3){
-      std::cout << "\ninput file error:\n" << "\toption \"displ_max\""
-          << " is mandatory and its value must be an integer greater or equal 0 and smaller 4!"
-          << "\n\n";
-      exit(0);
-    }
-    else std::cout << "\tmaximal displacement used ................ "
-        << displ_max << "\n\n";
-  }
-  catch(std::exception& e){
-    std::cout << e.what() << "\n";
-    exit(0);
-  }
-}
-// *****************************************************************************
-// simplifies and cleans read_parameters function
-static void config_input_data_handling (const int start_config,
-    const int end_config, const int delta_config) {
-
-  try{
-    if(start_config < 0){
-      std::cout << "\ninput file error:\n" << "\toption \"start config\""
-          << " is mandatory and its value must be an integer greater or equal 0!"
-          << "\n\n";
-      exit(0);
-    }
-    else if(end_config < 1 || end_config < start_config){
-      std::cout << "\ninput file error:\n" << "\toption \"end_config\""
-          << " is mandatory, its value must be an integer greater than 0,"
-          << " and it must be larger than start config!" << "\n\n";
-      exit(0);
-    }
-    else if(delta_config < 1){
-      std::cout << "\ninput file error:\n" << "\toption \"delta_config\""
-          << " is mandatory and its value must be an integer greater than 0!"
-          << "\n\n";
-      exit(0);
-    }
-    else std::cout << "\tprocessing configurations " << start_config << " to "
-        << end_config << " in steps of " << delta_config << "\n\n";
-  }
-  catch(std::exception& e){
-    std::cout << e.what() << "\n";
-    exit(0);
-  }
-}
-// *****************************************************************************
-// simplifies and cleans read_parameters function
-static void quark_check (quark quarks) {
-
-  try{
-    if(quarks.type != "u" && quarks.type != "d" && quarks.type != "s"
-        && quarks.type != "c"){
-      std::cout << "quarks.quark.type must be u, d, s or c" << std::endl;
-      exit(0);
-    }
-    else if(quarks.number_of_rnd_vec < 1){
-      std::cout << "quarks.quark.number_of_rnd_vec must be greater than 0"
-          << std::endl;
-      exit(0);
-    }
-    else if(quarks.dilution_T != "TI" && quarks.dilution_T != "TB"){
-      std::cout << "quarks.quark.dilutione_T must be TI or TB" << std::endl;
-      exit(0);
-    }
-    else if(quarks.number_of_dilution_T < 1){
-      std::cout << "quarks.quark.number_of_dilution_T must be greater than 0 "
-          "and smaller than the temporal extend" << std::endl;
-      exit(0);
-    }
-    else if(quarks.dilution_E != "EI" && quarks.dilution_E != "EB"){
-      std::cout << "quarks.quark.dilutione_E must be EI or EB" << std::endl;
-      exit(0);
-    }
-    else if(quarks.number_of_dilution_E < 1){
-      std::cout << "quarks.quark.number_of_dilution_E must be greater than 0 "
-          "and smaller than number of eigen vectors" << std::endl;
-      exit(0);
-    }
-    else if(quarks.dilution_D != "DI" && quarks.dilution_D != "DI"){
-      std::cout << "quarks.quark.dilutione_D must be DI or DB" << std::endl;
-      exit(0);
-    }
-    else if(quarks.number_of_dilution_D < 1 || quarks.number_of_dilution_D > 4){
-      std::cout << "quarks.quark.number_of_dilution_D must be greater than 0 "
-          "and smaller than 5" << std::endl;
-      exit(0);
-    }
-    else std::cout << quarks << std::endl;
-  }
-  catch(std::exception& e){
-    std::cout << e.what() << "\n";
-    exit(0);
-  }
-
-}
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
 void GlobalData::quark_input_data_handling (
     const std::vector<std::string> quark_configs) {
   try{
-    // Transform each configured quark into a quark via make_quark, inserting each
-    // object into the quark vector.
+    // Transform each configured quark into a quark via make_quark, 
+    // inserting each object into the quark vector.
     std::transform(quark_configs.begin(), quark_configs.end(),
         std::back_inserter(quarks), make_quark);
     // checking the contents for correctness
@@ -464,18 +289,38 @@ void GlobalData::quark_input_data_handling (
 void GlobalData::operator_input_data_handling (
     const std::vector<std::string> operator_list_configs) {
   try{
-    // Transform each configured quark into a quark via make_quark, inserting each
-    // object into the quark vector.
-    std::transform(operator_list_configs.begin(), operator_list_configs.end(),
-        std::back_inserter(operator_list), make_operator_list);
-    // checking the contents for correctness
-    //std::for_each(operators.begin(), operators.end(), operator_check);
+    // Transform each configured quark into a quark via make_quark,
+    // inserting each object into the quark vector.
+    //std::transform(operator_list_configs.begin(), operator_list_configs.end(),
+    //    std::back_inserter(operator_list), make_operator_list);
+    for(auto op_list : operator_list_configs)
+      operator_list.push_back(make_operator_list(op_list));
+    
   }
   catch(std::exception& e){
-    std::cout << e.what() << "\n";
+    std::cout << "operator_input_data_handling: " << e.what() << "\n";
     exit(0);
   }
 }
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+//void GlobalData::correlator_input_data_handling (
+//    const std::vector<std::string> correlator_list_configs) {
+//  try{
+//    // Transform each configured quark into a quark via make_quark, inserting each
+//    // object into the quark vector.
+//    make_correlator_list(correlator_list_configs, correlator_list);
+//
+////    std::transform(correlator_list_configs.begin(), 
+////                   correlator_list_configs.end(),
+////                   std::back_inserter(correlator_list), make_correlator_list);
+//  }
+//  catch(std::exception& e){
+//    std::cout << "correaltor_input_data_handling: " << e.what() << "\n";
+//    exit(0);
+//  }
+//}
 /******************************************************************************/
 /******************************************************************************/
 /******************************************************************************/
@@ -488,6 +333,8 @@ void GlobalData::read_parameters (int ac, char* av[]) {
     std::vector<std::string> quark_configs;
     // Variables that will store parsed values for operators.
     std::vector<std::string> operator_list_configs;
+    // Variables that will store parsed values for correlators.
+    std::vector<std::string> correlator_list_configs;
 
     // Declare a group of options that will be allowed only on command line
     po::options_description generic("Command line options");
@@ -504,7 +351,8 @@ void GlobalData::read_parameters (int ac, char* av[]) {
     po::options_description config("Input file options");
     // lattice options
     config.add_options()("output_path",
-        po::value<std::string>(&path_output)->default_value("../../contractions"),
+        po::value<std::string>(&path_output)->
+        default_value("../../contractions"),
         "path for output")
         ("config_path",
         po::value<std::string>(&path_config)->default_value("../../configs"),
@@ -550,27 +398,14 @@ void GlobalData::read_parameters (int ac, char* av[]) {
     config.add_options()("operator_lists.operator_list", 
         make_value(&operator_list_configs),
         "operator input is rather complicated - see documentation!!");
-    // momentum options
-    config.add_options()("number_of_max_mom",
-        po::value<int>(&number_of_max_mom)->default_value(-1),
-        "Maximum momentum squared")("max_mom_in_one_dir",
-        po::value<int>(&max_mom_in_one_dir)->default_value(-1),
-        "Maximum momentum in one direction");
-    // dirac options
-    config.add_options()("dirac_min",
-        po::value<int>(&dirac_min)->default_value(-1),
-        "dirac_min")("dirac_max",
-        po::value<int>(&dirac_max)->default_value(-1),
-        "dirac_max");
-    // displacement options
-    config.add_options()("displ_min",
-        po::value<int>(&displ_min)->default_value(-1),
-        "displ_min")("displ_max",
-        po::value<int>(&displ_max)->default_value(-1),
-        "displ_max");
+    // correlator list options
+    config.add_options()("correlator_lists.correlator_list", 
+        make_value(&correlator_list_configs),
+        "correlator input is rather complicated - see documentation!!");
     // configuration options
     config.add_options()("start_config",
-        po::value<int>(&start_config)->default_value(-1), "First configuration")(
+        po::value<int>(&start_config)->
+        default_value(-1), "First configuration")(
         "end_config", po::value<int>(&end_config)->default_value(0),
         "Last configuration")("delta_config",
         po::value<int>(&delta_config)->default_value(0),
@@ -629,13 +464,12 @@ void GlobalData::read_parameters (int ac, char* av[]) {
     //
     operator_input_data_handling(operator_list_configs);
     //
-    momentum_input_data_handling(number_of_max_mom, max_mom_in_one_dir, &momentum_squared);
-    //
-    dirac_input_data_handling(dirac_min, dirac_max);
-    //
-    displacement_input_data_handling(displ_min, displ_max);
+    correlator_input_data_handling(correlator_list_configs);
     //
     config_input_data_handling(start_config, end_config, delta_config);
+
+
+    init_from_infile();    
 
     // computing some global variables depending on the input values ***********
     dim_row = Lx * Ly * Lz * 3;

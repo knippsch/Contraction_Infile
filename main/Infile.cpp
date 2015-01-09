@@ -6,11 +6,7 @@
 // Description : stochastic LapH code
 //============================================================================
 
-#include <iostream>
-
 #include "GlobalData.h"
-
-#include "omp.h"
 
 int main (int ac, char* av[]) {
 

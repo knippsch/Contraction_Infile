@@ -26,8 +26,8 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
 
-#include "quark.h"
 #include "Operators.h"
+#include "typedefs.h"
 
 class GlobalData {
 
@@ -40,13 +40,6 @@ private:
   int number_of_eigen_vec;
   int number_of_rnd_vec;
   int number_of_inversions;
-  int number_of_max_mom;
-  int max_mom_in_one_dir;
-  int number_of_momenta;
-  int dirac_min;
-  int dirac_max;
-  int displ_min;
-  int displ_max;
   int start_config, end_config, delta_config;
   int verbose;
   std::string path_eigenvectors;
@@ -58,11 +51,18 @@ private:
   std::string path_config;
   std::vector<quark> quarks;
   std::vector<Operator_list> operator_list;
-  std::vector<int> momentum_squared;
-  void quark_input_data_handling (
+  Correlator_list correlator_list;
+  void quark_input_data_handling(
                         const std::vector<std::string> quark_configs);
-  void operator_input_data_handling (
+  void operator_input_data_handling(
                       const std::vector<std::string> operator_list_configs);
+  void correlator_input_data_handling(
+                         const std::vector<std::string>& correlator_string);
+
+  // new stuff
+  void init_from_infile();
+  vec_pdg_Corr op_Corr;
+  //
 
 
 public:
@@ -106,27 +106,6 @@ public:
   inline int get_number_of_rnd_vec () {
     return number_of_rnd_vec;
   }
-  inline int get_number_of_max_mom () {
-    return number_of_max_mom;
-  }
-  inline int get_max_mom_in_one_dir () {
-    return max_mom_in_one_dir;
-  }
-  inline int get_number_of_momenta() {
-    return momentum_squared.size();
-  }
-  inline int get_dirac_min() {
-    return dirac_min;
-  }
-  inline int get_dirac_max() {
-    return dirac_max;
-  }
-  inline int get_displ_min() {
-    return displ_min;
-  }
-  inline int get_displ_max() {
-    return displ_max;
-  }
   inline int get_start_config () {
     return start_config;
   }
@@ -156,9 +135,6 @@ public:
   }
   inline std::vector<quark> get_quarks() {
     return quarks;
-  }
-  inline std::vector<int> get_momentum_squared() {
-    return momentum_squared;
   }
 
   //! All con/de-structors are protected to assure that only one instance exists
