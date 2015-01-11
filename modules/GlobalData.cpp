@@ -53,6 +53,42 @@ quark make_quark (const std::string& quark_string) {
 // *****************************************************************************
 // *****************************************************************************
 // *****************************************************************************
+bool compare_quantum_numbers_of_pdg(const pdg& in1, const pdg& in2){
+
+  if( (in1.p3 == in2.p3) && 
+      (in1.dis3 == in2.dis3) && 
+      (in1.gamma == in2.gamma))
+    return true;
+  else
+    return false;
+
+}
+// *****************************************************************************
+// *****************************************************************************
+// *****************************************************************************
+size_t get_nb_vdaggerv(const std::vector<pdg>& in){
+
+  size_t counter = 0;
+
+  auto it = in.begin();
+  while(it != in.end()) {
+    auto it2 = it;
+    it2++;
+    while(it2 != in.end()) {
+      if(it->gamma != it2->gamma)
+        counter++;
+      it2++;
+    }
+    it++;
+  }
+
+  std::cout << counter << std::endl;
+  return counter;
+
+}
+// *****************************************************************************
+// *****************************************************************************
+// *****************************************************************************
 void GlobalData::init_from_infile() {
 
   // extracting all operators which are used in correlations functions
@@ -63,9 +99,10 @@ void GlobalData::init_from_infile() {
                           corr_list.operator_numbers.end());
   
   sort(used_operators.begin(), used_operators.end());
-  used_operators.erase(unique(used_operators.begin(), used_operators.end()), 
-                   used_operators.end());
-
+  used_operators.erase(std::unique(used_operators.begin(), 
+                                   used_operators.end()),
+                       used_operators.end());
+  // write quantum number in op_Corr
   for(const auto& op_entry : used_operators){
     for(const auto& individual_operator : operator_list[op_entry]){
       pdg write;
@@ -77,6 +114,20 @@ void GlobalData::init_from_infile() {
       }
     }
   }
+  // doubly counted op_Corr entries are deleted
+  auto it = op_Corr.begin();
+  while(it != op_Corr.end()) {
+    auto it2 = it;
+    it2++;
+    while(it2 != op_Corr.end()) {
+      if(compare_quantum_numbers_of_pdg(*it, *it2))
+        op_Corr.erase(it2);
+      else
+        it2++;
+    }
+    it++;
+  }
+
   // Test output for the time beeing TODO: can be deleted later
   for(auto a : op_Corr){
     std::cout << a.gamma;
@@ -86,17 +137,15 @@ void GlobalData::init_from_infile() {
       std::cout << " " << b;
     std::cout << std::endl;
   }
-//    for(const auto& bla : op_Corr)
-//    std::cout << bla.gamma << std::endl;
 
-  // TODO: doubly counted op_Corr entries should be searched for and deleted
+
 
 //  // nb_op - number of combinations of three-momenta and gamma structures
 //  // op    - vector of all three-momenta, three-displacements and gamma 
 //  //         structure combinations
-//  const size_t nb_op = number_of_operators;
-//  op_Corr.resize(nb_op);
-//  const size_t nb_VdaggerV = nb_dis*(nb_mom/2+1);
+  const size_t nb_op = op_Corr.size();
+  std::cout << nb_op << std::endl;
+  const size_t nb_VdaggerV = get_nb_vdaggerv(op_Corr);
 //  op_VdaggerV.resize(nb_VdaggerV);
 //  const size_t nb_rVdaggerVr = nb_dis*nb_mom;
 //  op_rVdaggerVr.resize(nb_rVdaggerVr);
@@ -128,9 +177,9 @@ static std::array<int, 3> create_3darray_from_string(std::string in) {
 
   boost::split(tokens, in, boost::is_any_of(","));
 
-  return {boost::lexical_cast<int>(tokens[0]),
+  return {{boost::lexical_cast<int>(tokens[0]),
           boost::lexical_cast<int>(tokens[1]),
-          boost::lexical_cast<int>(tokens[2]) };
+          boost::lexical_cast<int>(tokens[2]) }};
 
 }
 // *****************************************************************************
@@ -142,7 +191,7 @@ static void create_all_momentum_combinations(const std::vector<int>& in,
   for(int p1 = -max_p; p1 < max_p+1; p1++)
     for(int p2 = -max_p; p2 < max_p+1; p2++)
       for(int p3 = -max_p; p3 < max_p+1; p3++)
-        all_p.push_back({p1, p2, p3});
+        all_p.push_back({{p1, p2, p3}});
   // copying wanted combinations into out array
   for(const auto& p : in)
     for(const auto& all : all_p)
