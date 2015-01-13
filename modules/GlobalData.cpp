@@ -89,41 +89,60 @@ void GlobalData::set_Corr(){
     std::array<int, 6> write;
     if(op.id != 0){
       copy_quantum_numbers(op, write);
-      // ##############################################################
+      // ######################################################################
       // check if quantum numbers are already stored in rvdaggervr_qu_nb
       bool is_known_rvdvr = false;
-      for(const auto& rvdvr : rvdaggervr_qu_nb)
+      size_t fast_counter_rvdvr = 0;// this gives the Op id if QN are duplicate
+      for(const auto& rvdvr : rvdaggervr_qu_nb){
         if(rvdvr == write){
           is_known_rvdvr = true;
           break;
         }
+        fast_counter_rvdvr++;
+      }
       if(!is_known_rvdvr){ // setting the unknown quantum numbers
         op.id_rVdaggerVr = counter_rvdvr;
         counter_rvdvr++;
         rvdaggervr_qu_nb.push_back(write);
       }
-      // ##############################################################
+      else
+        op.id_rVdaggerVr = fast_counter_rvdvr;
+      // ######################################################################
       // check if quantum numbers are already stored in vdaggerv_qu_nb
       bool is_known_vdv = false;
-      // first check for doubled quantum numbers
-      for(const auto& vdv : vdaggerv_qu_nb)
+      size_t fast_counter_vdv = 0;// this gives the Op id if QN are duplicate
+      // first check for duplicate quantum numbers
+      for(const auto& vdv : vdaggerv_qu_nb){
         if(vdv == write){
           is_known_vdv = true;
           break;
         }
+        fast_counter_vdv++;
+      }
       if(!is_known_vdv){ // second check for complex conjugate momenta
+        fast_counter_vdv = 0;
         for(size_t i = 3; i < 6; i++)
           write[i] *= -1;
-        for(const auto& vdv : vdaggerv_qu_nb)
+        for(const auto& vdv : vdaggerv_qu_nb){
           if(vdv == write){
             is_known_vdv = true;
             break;
           }
+          fast_counter_vdv++;
+        }
         if(!is_known_vdv){
           op.id_VdaggerV = counter_vdv;
           vdaggerv_qu_nb.push_back(write);
           counter_vdv++;
         }
+        else{
+          op.flag_VdaggerV = -1;
+          op.id_VdaggerV = fast_counter_vdv;
+        }
+      }
+      else{
+        op.flag_VdaggerV = 1;
+        op.id_VdaggerV = fast_counter_vdv;
       }
     }
     else{ // setting the very first entry
@@ -137,9 +156,44 @@ void GlobalData::set_Corr(){
     }
   }
 
+  // setting the lookuptables to be able to reconstruct the quantum numbers
+  // when computing VdaggerV and rVdaggerVr
   op_VdaggerV.resize(vdaggerv_qu_nb.size());
   op_rVdaggerVr.resize(rvdaggervr_qu_nb.size());
 
+  size_t index = 0;
+  for(auto& op_vdv : op_VdaggerV){
+    op_vdv.id = index;
+    for(const auto& op : op_Corr){
+      if(index = op.id_VdaggerV)
+        op_vdv.index = op.id;
+    }
+    index++;
+  }
+  index = 0;
+  for(auto& op_rvdvr : op_rVdaggerVr){
+    op_rvdvr.id = index;
+    for(const auto& op : op_Corr){
+      if(index = op.id_VdaggerV){
+        op_rvdvr.index = op.id;
+        if(op.flag_VdaggerV == 1)
+          op_rvdvr.adjoint = false;
+        else
+          op_rvdvr.adjoint = true;
+      }
+    }
+    index++;
+  }
+
+  // Test output for the time beeing TODO: can be deleted later
+  for(auto a : op_Corr){
+    std::cout << a.gamma;
+    for(auto b : a.dis3)
+      std::cout << " " << b;
+    for(auto b : a.p3)
+      std::cout << " " << b;
+    std::cout << std::endl;
+  }
   std::cout << "writing vdaggerv quantum numbers" << std::endl;
   for(auto a : vdaggerv_qu_nb){
     for(auto b : a)
@@ -152,19 +206,8 @@ void GlobalData::set_Corr(){
       std::cout << b << " ";
     std::cout << std::endl;
   }
-
   for(auto a : op_Corr)
     std::cout << a.id_VdaggerV << "  " << a.id_rVdaggerVr << std::endl;
-
-  // Test output for the time beeing TODO: can be deleted later
-//  for(auto a : op_Corr){
-//    std::cout << a.gamma;
-//    for(auto b : a.dis3)
-//      std::cout << " " << b;
-//    for(auto b : a.p3)
-//      std::cout << " " << b;
-//    std::cout << std::endl;
-//  }
 
 }
 // *****************************************************************************
