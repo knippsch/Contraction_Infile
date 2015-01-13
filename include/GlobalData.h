@@ -61,7 +61,10 @@ private:
 
   // new stuff
   void init_from_infile();
+  void set_Corr();
   vec_pdg_Corr op_Corr;
+  vec_pd_VdaggerV op_VdaggerV;
+  vec_pd_rVdaggerVr op_rVdaggerVr;
   //
 
 

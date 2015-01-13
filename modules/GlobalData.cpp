@@ -66,24 +66,105 @@ bool compare_quantum_numbers_of_pdg(const pdg& in1, const pdg& in2){
 // *****************************************************************************
 // *****************************************************************************
 // *****************************************************************************
-size_t get_nb_vdaggerv(const std::vector<pdg>& in){
+static void copy_quantum_numbers(const pdg& in, std::array<int, 6>& out){
+  out[0] = in.dis3[0];
+  out[1] = in.dis3[1];
+  out[2] = in.dis3[2];
+  out[3] = in.p3[0];
+  out[4] = in.p3[1]; 
+  out[5] = in.p3[2];
+}
+// *****************************************************************************
+// *****************************************************************************
+// *****************************************************************************
+void GlobalData::set_Corr(){
 
-  size_t counter = 0;
-
-  auto it = in.begin();
-  while(it != in.end()) {
-    auto it2 = it;
-    it2++;
-    while(it2 != in.end()) {
-      if(it->gamma != it2->gamma)
-        counter++;
-      it2++;
+  // first number is the operator id, the next three is the displacement vector
+  // and the last three the momentum vector
+  std::vector<std::array<int, 6> > rvdaggervr_qu_nb;
+  std::vector<std::array<int, 6> > vdaggerv_qu_nb;
+  size_t counter_rvdvr = 0;
+  size_t counter_vdv = 0;
+  for(auto& op : op_Corr){
+    std::array<int, 6> write;
+    if(op.id != 0){
+      copy_quantum_numbers(op, write);
+      // ##############################################################
+      // check if quantum numbers are already stored in rvdaggervr_qu_nb
+      bool is_known_rvdvr = false;
+      for(const auto& rvdvr : rvdaggervr_qu_nb)
+        if(rvdvr == write){
+          is_known_rvdvr = true;
+          break;
+        }
+      if(!is_known_rvdvr){ // setting the unknown quantum numbers
+        op.id_rVdaggerVr = counter_rvdvr;
+        counter_rvdvr++;
+        rvdaggervr_qu_nb.push_back(write);
+      }
+      // ##############################################################
+      // check if quantum numbers are already stored in vdaggerv_qu_nb
+      bool is_known_vdv = false;
+      // first check for doubled quantum numbers
+      for(const auto& vdv : vdaggerv_qu_nb)
+        if(vdv == write){
+          is_known_vdv = true;
+          break;
+        }
+      if(!is_known_vdv){ // second check for complex conjugate momenta
+        for(size_t i = 3; i < 6; i++)
+          write[i] *= -1;
+        for(const auto& vdv : vdaggerv_qu_nb)
+          if(vdv == write){
+            is_known_vdv = true;
+            break;
+          }
+        if(!is_known_vdv){
+          op.id_VdaggerV = counter_vdv;
+          vdaggerv_qu_nb.push_back(write);
+          counter_vdv++;
+        }
+      }
     }
-    it++;
+    else{ // setting the very first entry
+      copy_quantum_numbers(op, write);
+      rvdaggervr_qu_nb.push_back(write);
+      vdaggerv_qu_nb.push_back(write);
+      op.id_VdaggerV = counter_vdv;
+      op.id_rVdaggerVr = counter_rvdvr;
+      counter_rvdvr++;
+      counter_vdv++;
+    }
   }
 
-  std::cout << counter << std::endl;
-  return counter;
+  op_VdaggerV.resize(vdaggerv_qu_nb.size());
+  op_rVdaggerVr.resize(rvdaggervr_qu_nb.size());
+
+  std::cout << "writing vdaggerv quantum numbers" << std::endl;
+  for(auto a : vdaggerv_qu_nb){
+    for(auto b : a)
+      std::cout << b << " ";
+    std::cout << std::endl;
+  }
+  std::cout << "writing rvdaggervr quantum numbers" << std::endl;
+  for(auto a : rvdaggervr_qu_nb){
+    for(auto b : a)
+      std::cout << b << " ";
+    std::cout << std::endl;
+  }
+
+  for(auto a : op_Corr)
+    std::cout << a.id_VdaggerV << "  " << a.id_rVdaggerVr << std::endl;
+
+  // Test output for the time beeing TODO: can be deleted later
+//  for(auto a : op_Corr){
+//    std::cout << a.gamma;
+//    for(auto b : a.dis3)
+//      std::cout << " " << b;
+//    for(auto b : a.p3)
+//      std::cout << " " << b;
+//    std::cout << std::endl;
+//  }
 
 }
 // *****************************************************************************
@@ -127,34 +208,18 @@ void GlobalData::init_from_infile() {
     }
     it++;
   }
+  // setting the identification numbers of op_Corr
+  size_t counter = 0;
+  for(auto& op : op_Corr)
+    op.id = counter++;
 
-  // Test output for the time beeing TODO: can be deleted later
-  for(auto a : op_Corr){
-    std::cout << a.gamma;
-    for(auto b : a.dis3)
-      std::cout << " " << b;
-    for(auto b : a.p3)
-      std::cout << " " << b;
-    std::cout << std::endl;
-  }
+  // setting vaggerv and so on
+  set_Corr();
 
-
-
-//  // nb_op - number of combinations of three-momenta and gamma structures
-//  // op    - vector of all three-momenta, three-displacements and gamma 
-//  //         structure combinations
-  const size_t nb_op = op_Corr.size();
-  std::cout << nb_op << std::endl;
-  const size_t nb_VdaggerV = get_nb_vdaggerv(op_Corr);
-//  op_VdaggerV.resize(nb_VdaggerV);
-//  const size_t nb_rVdaggerVr = nb_dis*nb_mom;
-//  op_rVdaggerVr.resize(nb_rVdaggerVr);
-//  set_Corr();
-//
-//  // nb_op_C2 - number of combinations of absolute values squared of momenta
-//  //            and gamma-displacement combinations for 2pt-fct
-//  // op_C2    - vector of all combinations for 2pt-fct and vector of 
-//  //            op-index-pairs with all corresponding three-vectors and gammas
+  // nb_op_C2 - number of combinations of absolute values squared of momenta
+  //            and gamma-displacement combinations for 2pt-fct
+  // op_C2    - vector of all combinations for 2pt-fct and vector of 
+  //            op-index-pairs with all corresponding three-vectors and gammas
 //  const size_t nb_op_C2 = nb_mom_sq * nb_dg * nb_dg;
 //  op_C2.resize(nb_op_C2);
 //  set_C2();
