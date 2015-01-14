@@ -20,7 +20,7 @@ all: rmxeq mkdep mkxeq
 
 MAIN = Infile
 
-GENERAL = GlobalData 
+GENERAL = GlobalData GlobalData_input_data_handling
 
 MODULES = $(GENERAL)
 

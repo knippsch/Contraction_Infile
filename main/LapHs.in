@@ -29,14 +29,14 @@ quark = u:2:TI:2:EI:4:DI:4
 # operators to be used
 [operator_lists]
 operator_list = g5.g3.d(0,0,1).p0:g5.g2.d(0,1,0).p0
-operator_list = g5.d0.p0,1,2:g6.d0.p0,1,2
+operator_list = g3.d0.p0,1,2:g6.d0.p0,1,2
 operator_list = g5.d0.p0,1,2
-operator_list = g5.d0.p0,1,2
+operator_list = g4.d0.p0,1,2
 
 # all correlation functions which will be computed !!MUST BE AT END OF FILE!!
 [correlator_lists]
 correlator_list = C2+:Q0:Op1:Q0:Op1:GEVPdir
-correlator_list = C4I2+:Q0:Op0:Q0:Op1:Q0:Op2:Q0:Op2:GEVPmom:P0,1,2
+correlator_list = C4I2+:Q0:Op0:Q0:Op1:Q0:Op2:Q0:Op3:GEVPmom:P0,1,2
 
 
 
